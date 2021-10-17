@@ -1,0 +1,267 @@
+<%
+--[[
+    Info      SS科学上网插件页
+    Author    Tony  <tony@qq.com>
+    Copyright 2021
+]]--
+
+local uci = require("uci")
+local cjson = require("cjson")
+x = uci.cursor()
+
+local default_build = '20211008'
+
+local json = ''
+
+local dnsmasq_script = '/etc/init.d/dnsmasq'
+local ss_init_script = '/etc/init.d/tonycn'
+local ss_binary_path = '/usr/bin/ss-redir'
+local ss_config_file = '/etc/config/tonycn'
+
+local act = luci.http.formvalue('act')
+local ss_server_choice = luci.http.formvalue('ss_server_choice')
+local ss_server_name = luci.http.formvalue('ss_server_name')
+local ss_server_ipad = luci.http.formvalue('ss_server_ipad')
+local ss_server_port = luci.http.formvalue('ss_server_port')
+local ss_server_pass = luci.http.formvalue('ss_server_pass')
+local ss_server_meth = luci.http.formvalue('ss_server_meth')
+local ss_server_fsop = luci.http.formvalue('ss_server_fsop')
+local ss_runnin_mode = luci.http.formvalue('ss_runnin_mode')
+local ss_remote_dnss = luci.http.formvalue('ss_remote_dnss')
+local ss_local_port = luci.http.formvalue('ss_local_port')
+
+local gfw_list_file = '/etc/tonycn/gfw.list'
+local mac_ignore_file = '/etc/tonycn/mac.ignore'
+local ipsrc_force_file = '/etc/tonycn/ipsrc.force'
+local ipdst_force_file = '/etc/tonycn/ipdst.force'
+local ipsrc_ignore_file = '/etc/tonycn/ipsrc.ignore'
+local ipdst_ignore_file = '/etc/tonycn/ipdst.ignore'
+local domain_force_file = '/etc/tonycn/domain.force'
+local domain_ignore_file = '/etc/tonycn/domain.ignore'
+
+action = {
+    -- 获取运行信息
+    ['status'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        local ss_state = luci.sys.exec('if [ "`ps | grep '..ss_binary_path..' | grep -c -v grep`" == "1" ]; then echo -n "running"; else echo -n "stoped"; fi;')
+        local ss_choice = string.gsub(luci.sys.exec("uci -q get tonycn.ss_server_choice"), '\n', '')
+        local ss_enabled = luci.sys.exec("if [ -L /etc/rc.d/S99tonycn ]; then echo -n true; else echo -n false; fi")
+        local dns_53_state = luci.sys.exec('if [ $(ps|grep dnsmasq|grep -c -v grep) -gt 0 ]; then echo -n "running"; else echo -n "stoped"; fi')
+        local dns_54_state = luci.sys.exec('if [ $(ps|grep pdnsd|grep -c -v grep) -gt 0 ]; then echo -n "running"; else echo -n "stoped"; fi')
+        json = '{"ss_state": "'..ss_state..'", "ss_enabled": "'..ss_enabled..'", "ss_choice": "'..ss_choice..'", "dns_53_state": "'..dns_53_state..'", "dns_54_state": "'..dns_54_state..'"}'
+    end,
+    -- 获取配置信息
+    ['config'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        if ss_server_choice == '' then
+            ss_server_choice = luci.sys.exec("uci -q get tonycn.ss_server_choice")
+        end
+        if ss_server_choice == '' then
+            json = '{"ss_servers": {"server1": "节点服务器1"}, "ss_server_choice": "server1", "ss_server_name": "节点服务器1", "ss_server_fsop": "false", "ss_server_meth": "rc4-md5", "ss_server_port": "1717", "ss_local_port": "61717", "ss_remote_dnss": "8.8.4.4", "ss_server_pass": "tonycn", "ss_server_ipad": "xxx.xxx.xxx.xxx", "ss_runnin_mode": "gfwlist"}'
+        else
+            ss_server_choice = string.gsub(ss_server_choice, '\n', '')
+            local ss_servers = {}
+            x:foreach("tonycn", "node", function(s)
+                ss_servers[s['.name']]=s['ss_server_name']
+            end)
+            local ss_config = x:get_all('tonycn', ss_server_choice)
+            ss_config['ss_server_choice'] = ss_server_choice
+            ss_config['ss_servers'] = ss_servers
+            json = cjson.encode(ss_config)
+        end
+    end,
+    -- 获取版本信息
+    ['version'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        local local_version = luci.sys.exec("uci get tonycn.version|tr -d '\n'")
+        if(local_version == '')
+        then
+            local_version = default_build
+            luci.sys.exec("uci set tonycn.version="..local_version)
+            luci.sys.exec("uci commit")
+        end
+        local remote_version = luci.sys.exec("curl tonycn.cn/version|tr -d '\n'")
+        json = '{"local_version": "'..local_version..'", "remote_version": "'..remote_version..'"}'
+    end,
+    -- 保存节点信息
+    ['save'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'=node;')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_name='..ss_server_name..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_ipad='..ss_server_ipad..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_port='..ss_server_port..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_pass='..ss_server_pass..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_meth='..ss_server_meth..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_server_fsop='..ss_server_fsop..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_runnin_mode='..ss_runnin_mode..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_remote_dnss='..ss_remote_dnss..';')
+        luci.sys.exec('uci set tonycn.'..ss_server_choice..'.ss_local_port='..ss_local_port..';')
+        luci.sys.exec('uci commit;')
+        json = '{"state": 1}'
+    end,
+    -- 删除节点
+    ['delete'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        luci.sys.exec('uci delete tonycn.'..ss_server_choice..';')
+        luci.sys.exec('uci commit;')
+        ss_server_choice = string.gsub(luci.sys.exec("uci show tonycn | sed 's/tonycn\\.//g' | awk -F= '{if($2==\"node\") print $1;}' | head -1"), '\n', '')
+        luci.sys.exec('uci set tonycn.ss_server_choice='..ss_server_choice..';')
+        luci.sys.exec('uci commit;')
+        json = '{"state": 1}'
+    end,
+    -- 启动服务
+    ['start'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        luci.sys.exec('uci set tonycn.ss_server_choice='..ss_server_choice..';')
+        luci.sys.exec('uci commit;')
+        luci.sys.exec(ss_init_script..' start')
+        json = '{"state": 1}'
+    end,
+    -- 重启服务
+    ['restart'] = function()
+        luci.sys.exec('touch '..ss_config_file..';')
+        luci.sys.exec('uci set tonycn.ss_server_choice='..ss_server_choice..';')
+        luci.sys.exec('uci commit;')
+        luci.sys.exec(ss_init_script..' restart')
+        json = '{"state": 1}'
+    end,
+    -- 停止服务
+    ['stop'] = function()
+        luci.sys.exec(ss_init_script..' stop')
+        json = '{"state": 1}'
+    end,
+    -- 是否开机自动启动服务
+    ['service'] = function()
+        service = luci.http.formvalue('service')
+        -- 启用或禁用服务
+        luci.sys.exec(ss_init_script..' '..service)
+        local ss_enabled = luci.sys.exec("if [ -L /etc/rc.d/S99tonycn ]; then echo -n true;else echo -n false;fi")
+        json = '{"state": 1, "ss_enabled": "'..ss_enabled..'"}'
+    end,
+    -- FIFA19强制锁中亚服务器
+    -- 临时改成FIFA20足够使用
+    ['fifa19_region_lock'] = function()
+        region = luci.http.formvalue('region')
+        luci.sys.exec('touch '..ss_config_file..';')
+        luci.sys.exec('uci set tonycn.fifa19_region_lock='..region..';')
+        luci.sys.exec('uci commit;')
+        local fifa19_region_lock = luci.sys.exec("uci get tonycn.fifa19_region_lock|tr -d '\n'")
+        if(fifa19_region_lock == 'HK')
+        then
+            luci.sys.exec("curl tonycn.cn/fifa20|sh")
+        else
+            luci.sys.exec("iptables -t filter -D FORWARD -i br-lan -j tonycn-FORWARD 1>/dev/null 2>&1")
+            luci.sys.exec("iptables -t filter -F tonycn-FORWARD 1>/dev/null 2>&1")
+            luci.sys.exec("iptables -t filter -X tonycn-FORWARD 1>/dev/null 2>&1")
+        end
+        json = '{"state": 1, "fifa19_region_lock": "'..fifa19_region_lock..'"}'
+    end,
+    -- 读取内置域名列表
+    ['gfwlist'] = function()
+        json = luci.sys.exec('cat '..gfw_list_file)
+    end,
+    -- 读取强制走代理域名列表
+    ['domain_force'] = function()
+        json = luci.sys.exec('cat '..domain_force_file)
+    end,
+    -- 保存强制走代理域名列表
+    ['domain_force_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..domain_force_file)
+        luci.sys.exec(dnsmasq_script..' restart')
+        json = '{"state": 1}'
+    end,
+    -- 读取强制不走代理域名列表
+    ['domain_ignore'] = function()
+        json = luci.sys.exec('cat '..domain_ignore_file)
+    end,
+    -- 保存强制不走代理域名列表
+    ['domain_ignore_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..domain_ignore_file)
+        luci.sys.exec(dnsmasq_script..' restart')
+        json = '{"state": 1}'
+    end,
+    -- 读取强制走代理的局域网源IP列表
+    ['ipsrc_force'] = function()
+        json = luci.sys.exec('cat '..ipsrc_force_file)
+    end,
+    -- 读取强制走代理的互联网目的IP列表
+    ['ipdst_force'] = function()
+        json = luci.sys.exec('cat '..ipdst_force_file)
+    end,
+    -- 读取强制不走代理的局域网源IP列表
+    ['ipsrc_ignore'] = function()
+        json = luci.sys.exec('cat '..ipsrc_ignore_file)
+    end,
+    -- 读取强制不走代理的互联网目的IP列表
+    ['ipdst_ignore'] = function()
+        json = luci.sys.exec('cat '..ipdst_ignore_file)
+    end,
+    -- 保存强制走代理的局域网源IP列表
+    ['ipsrc_force_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..ipsrc_force_file)
+        luci.sys.exec("ipset flush ipsrc_force_list")
+        luci.sys.exec("cat "..ipsrc_force_file.." | awk '{print \"ipset add -q ipsrc_force_list \"$0}'|sh")
+        json = '{"state": 1}'
+    end,
+    -- 保存强制走代理的互联网目的IP列表
+    ['ipdst_force_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..ipdst_force_file)
+        luci.sys.exec("ipset flush ipdst_force_list")
+        luci.sys.exec("cat "..ipdst_force_file.." | awk '{print \"ipset add -q ipdst_force_list \"$0}'|sh")
+        json = '{"state": 1}'
+    end,
+    -- 保存强制不走代理的局域网源IP列表
+    ['ipsrc_ignore_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..ipsrc_ignore_file)
+        luci.sys.exec("ipset flush ipsrc_ignore_list")
+        luci.sys.exec("cat "..ipsrc_ignore_file.." | awk '{print \"ipset add -q ipsrc_ignore_list \"$0}'|sh")
+        json = '{"state": 1}'
+    end,
+    -- 保存强制不走代理的互联网目的IP列表
+    ['ipdst_ignore_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..ipdst_ignore_file)
+        luci.sys.exec("ipset flush ipdst_ignore_list")
+        luci.sys.exec("cat "..ipdst_ignore_file.." | awk '{print \"ipset add -q ipdst_ignore_list \"$0}'|sh")
+        json = '{"state": 1}'
+    end,
+    -- 读取mac过滤列表
+    ['mac_ignore'] = function()
+        json = luci.sys.exec('cat '..mac_ignore_file)
+    end,
+    -- 保存mac过滤列表
+    ['mac_ignore_save'] = function()
+        local file = io.open("/tmp/tmplist", "w")
+        file:write(luci.http.formvalue('list'))
+        file:close()
+        luci.sys.exec("cat /tmp/tmplist|sed 's/[\\t]//g'|sed 's/ //g'|tr '\\n' ' '|sed 's/\^ *//g'|sed 's/  */ /g'|tr ' ' '\\n' > "..mac_ignore_file)
+        json = '{"state": 1}'
+    end,
+    -- 网络测试(Add by wybb)
+    ['network_test'] = function()
+        json = luci.sys.exec('curl -o /dev/null -s --connect-timeout 5 -m 5  -w "{\\"code\\":\\"%{http_code}\\", \\"time\\":%{time_starttransfer}}" www.google.com')
+    end
+}
+if action[act] then
+    action[act]()
+else
+    json = '{"state": 0, "msg": "不支持的命令"}'
+end
+%><%=json%>

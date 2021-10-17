@@ -1,0 +1,95 @@
+<%
+--[[
+    Info      SS科学上网插件页
+    Author    Tony  <tony@qq.com>
+    Copyright 2021
+]]--
+local build  = "20211008"
+local i18n = require "luci.i18n"
+include('admin_web/header')
+
+-- 极路由官方固件1.4.5版变动了css文件所在目录
+local css_location = luci.sys.exec("if [ -f '/www"..resource.."/v2/style/net.css' ]; then echo -n 'true'; else echo -n 'false'; fi")
+if css_location == 'true' then
+    css_location = resource..'/v2/style/net.css';
+else
+    css_location = resource..'/v2/style/admin_web/net.css';
+end
+%>
+<link rel="stylesheet" type="text/css" href="<%=css_location..'?b='..build%>">
+<div id="bd">
+    <div class="com-main clearfix">
+        <div id="right_part" class="G-rightSide">
+            <div>
+                <div class="G-power-panel">
+                    <a href="javascript:;" class="icon power G-handle J_system_restart" style="display:none;"></a>
+                    <p class="J_system_restart G-handle" style="display:none;"><%=i18n.translate("g_reboot")%></p>
+                </div>
+            </div>
+        </div>
+        <% include('admin_web/menu/menu_left') %>
+        <div class="G-main" id="loading_view">
+                <div class="G-page-loading"></div>
+        </div>
+        <div class="G-main" id="middle_part" style="display: none;">
+            <div id="main_view" style="display: none;">
+
+                <div class="G-main-panel" style="visibility: hidden;">
+                    <div class="G-gray-panel">
+                        <div class="G-main-panel-hd">当前SS状态</div>
+                        <div class="G-main-panel-bd">
+                            <div class="net-status" id="ss_stauts_area">
+                                <div class="G-panel-loading"></div>
+                                <table style="display: none;">
+                                    <col width="30%"/>
+                                    <col width="*"/>
+                                    <col width="90"/>
+                                    <tr>
+                                        <td id="current_way">当前节点线路</td>
+                                        <td id="ss_status"><span class="icon icon-x"></span><span></span></td>
+                                        <td><a href="javascript:;" class="btn-normal" id="ss_setup_node_bt">节点线路设置</a> </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="G-main-panel setting-box" style="visibility: hidden;">
+                    <div class="G-main-panel-hd"><span class="icon setting"></span><span><%=i18n.translate('web_advanced_set')%></span></div>
+                    <div class="G-main-panel-bd G-btn-list setting-list">
+                        <ul>
+                            <li><a href="javascript:;" id="ss_setup_domain_bt">域名列表管理</a></li>
+                            <li><a href="javascript:;" id="ss_setup_ip_bt">IP列表管理</a></li>
+                            <li><a href="javascript:;" id="ss_setup_mac_bt">设备黑名单管理</a></li>
+                            <li><a href="javascript:;" id="ss_update_bt">插件升级</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SS节点部分 -->
+            <% include('admin_web/tonycn/ss_setup_node') %>
+
+            <!-- SS域名部分 -->
+            <% include('admin_web/tonycn/ss_setup_domain') %>
+
+            <!-- SSIP部分 -->
+            <% include('admin_web/tonycn/ss_setup_ip') %>
+
+            <!-- SS MAC部分 -->
+            <% include('admin_web/tonycn/ss_setup_mac') %>
+
+            <!-- 插件升级部分 -->
+            <% include('admin_web/tonycn/update') %>
+
+        </div>
+    </div>
+    <div class="G-tip-pop J_ss_fsop_tip_text" style="width: 170px; height: 16px; display: none">ss-redir不支持该功能</div>
+</div>
+<% include('admin_web/footer') %>
+<!-- 通用模块的专属js -->
+<script type="text/javascript" src="<%=resource%>/v2/js/admin_web/general_module.js?b=<%=build%>"></script>
+<!-- SS插件页的专属js -->
+<script type="text/javascript" src="<%=resource%>/v2/js/admin_web/tonycn.js?b=<%=build%>"></script>
+</body>
+</html>
